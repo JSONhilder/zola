@@ -97,6 +97,20 @@ pub fn build_cli() -> App<'static, 'static> {
                         .long("drafts")
                         .takes_value(false)
                         .help("Include drafts when loading the site"),
+                ]),
+            SubCommand::with_name("add")
+                .about("Adds a markdown file to content directory with a provided path.")
+                .args(&[
+                    Arg::with_name("file_path")
+                        .short("p")
+                        .long("file-path")
+                        .takes_value(true)
+                        .help("Defines the path for file within the content directory."),
+                    Arg::with_name("file_title")
+                        .short("t")
+                        .long("file-title")
+                        .takes_value(true)
+                        .help("Defines a title for the markdown file front matter - if not used defaults to pathname"),
                 ])
         ])
 }
