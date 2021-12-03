@@ -117,6 +117,26 @@ fn main() {
                 }
             };
         }
+        ("add", Some(matches)) => {
+            let file_path = matches.value_of("file_path").map(|output_dir| Path::new(output_dir));
+
+            // File path is required, fail and inform user if not provided
+            if file_path.is_none() {
+                console::error("Path of file is required, use -p or --file-path flag.");
+                ::std::process::exit(1);
+            }
+
+            match cmd::add(
+                file_path,
+                matches.value_of("file_title")
+            ) {
+                Ok(()) => (),
+                Err(e) => {
+                    console::unravel_errors("Failed to add new md file to content", &e);
+                    ::std::process::exit(1);
+                }
+            };
+        }
         _ => unreachable!(),
     }
 }
