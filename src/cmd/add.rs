@@ -3,6 +3,7 @@
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
+use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::env::current_dir;
@@ -11,6 +12,8 @@ use std::fs::create_dir;
 use errors::Result;
 
 use crate::console;
+use crate::prompt::ask_bool;
+
 use utils::fs::create_file;
 
 // #[cfg(windows)]
@@ -58,63 +61,77 @@ fn custom_title(title: &str) -> String {
     front_matter
 }
 
+fn create_project_file(path:&Path, ext:&OsStr, file_title:Option<&str>) -> Result<()> {
+        console::info(format!("Creating {:?} file.", &path.as_os_str()).as_str());
+
+        if ext == "md" {
+            if let Some(title) = file_title {
+                create_file(&path, &custom_title(title))?
+            } else {
+                return create_file(&path, &custom_title("\"\""))
+            }
+        } else {
+            return create_file(&path, "")
+        }
+
+    Ok(())
+}
+
+fn create_project_dir(path: &Path) -> Result<()> {
+        if !path.is_dir() {
+            console::info("Directory does not exist:");
+            console::info(format!("Creating {:?} and adding _index file.", &path).as_str());
+            create_dir(&path)?;
+            create_file(&path.join("_index.md"), _INDEX_CONTENT)?;
+        }
+
+    Ok(())
+}
+
 pub fn add(file_path: Option<&Path>, file_title: Option<&str>) -> Result<()> {
+    let mut dest_path = file_path.unwrap().to_path_buf();
 
     // run validate_current_dir to check if directory is safe then we can use ? on
     // current_dir safely, seems to be tricky as its io::Result matching is problematic
     if validate_users_directory() {
         let mut user_dir = current_dir()?;
+
         user_dir.push("content"); // point the directory(zola project) to the content folder
 
-        if user_dir.exists() { // checks if the __dir/content directory exists all zola projects have it
+        if user_dir.exists() { // checks if the ../content directory exists all zola projects have it
 
-            if let Some(file_path) = file_path { // I am verifying here again but cli will complain if path not passed
+            if has_trailing_slash(&dest_path) { // file path needs to point to a file, not a directory.
+                console::error("Path given is a directory, please use a path to a file.");
+            } else {
+                // check if the given file path has an extension if not default to md
+                if dest_path.extension().is_none() {
+                    dest_path.set_extension("md");
+                }
 
-                if has_trailing_slash(file_path) { // file path needs to point to a file, not a directory.
-                    console::error("Path given is a directory, please use a path to a file.");
-                } else {
-                    let mut file_path_buf = file_path.to_path_buf();
+                let mut segments = dest_path.components().peekable(); // create peekable so we can check if last item
+                while let Some(segment) = segments.next() {
+                    user_dir.push(&segment);
 
-                    // should I do this we no longer use the path since we converted it to mutable
-                    // pathbuf
-                    drop(file_path);
+                    if segments.peek().is_some() {
+                        // still more path to go through
 
-                    // check if the given file path has an extension if not default to md
-                    if file_path_buf.extension().is_none() {
-                        file_path_buf.set_extension("md");
-                    }
-
-                    /*
-                        using the current ../content/ path, map over each component of the
-                        user passed file path, append to current_dir and check if the directory exists
-                        if not create it and a _index.md file move on to the next component, if component
-                        has an extension create the file with front matter and end loop
-
-                        To stop weird behaviour and users being funny, stop loop at the first component with an
-                        extension
-                     */
-
-                    for segment in file_path_buf.components() {
-                        user_dir.push(&segment);
                         if let Some(ext) = user_dir.extension() {
-                            console::info(format!("Creating {:?} file.", &segment.as_os_str()).as_str());
-                            if ext == "md" {
-                                if let Some(title) = file_title {
-                                    return create_file(&user_dir, &custom_title(title))
-                                } else {
-                                    return create_file(&user_dir, &custom_title("\"\""))
-                                }
+                            // This segment has a extension lets check if its the end of the path or
+                            // if its got a trailing slash
+                            let valid_entry = ask_bool("Warning: a file extension is in your path, is this file meant to be there?", false)?;
+
+                            if valid_entry {
+                                create_project_file(&user_dir, &ext, file_title)?;
+                                let _ = &user_dir.pop();
                             } else {
-                                return create_file(&user_dir, "")
+                                create_project_dir(&user_dir)?
                             }
                         } else {
-                            if !user_dir.is_dir() {
-                                console::info("Directory does not exist:");
-                                console::info(format!("Creating {:?} and adding _index file.", &user_dir).as_str());
-                                create_dir(&user_dir)?;
-                                create_file(&user_dir.join("_index.md"), _INDEX_CONTENT)?;
-                            }
+                            create_project_dir(&user_dir)?
                         }
+
+                    } else {
+                        create_project_file(&user_dir, user_dir.extension().unwrap(), file_title)?
                     }
                 }
             }
