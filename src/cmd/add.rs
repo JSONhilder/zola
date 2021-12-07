@@ -1,5 +1,5 @@
-// #[cfg(windows)]
-// use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
@@ -16,11 +16,11 @@ use crate::prompt::ask_bool;
 
 use utils::fs::create_file;
 
-// #[cfg(windows)]
-// fn has_trailing_slash(p: &Path) -> bool {
-//     let last = p.as_os_str().encode_wide().last();
-//     last == Some(b'\\' as u16) || last == Some(b'/' as u16)
-// }
+#[cfg(windows)]
+fn has_trailing_slash(p: &Path) -> bool {
+    let last = p.as_os_str().encode_wide().last();
+    last == Some(b'\\' as u16) || last == Some(b'/' as u16)
+}
 
 #[cfg(unix)]
 fn has_trailing_slash(p: &Path) -> bool {
@@ -62,7 +62,6 @@ fn custom_title(title: &str) -> String {
 }
 
 fn create_project_file(path:&Path, ext:&OsStr, file_title:Option<&str>) -> Result<()> {
-        console::info(format!("Creating {:?} file.", &path.as_os_str()).as_str());
 
         if ext == "md" {
             if let Some(title) = file_title {
@@ -79,8 +78,6 @@ fn create_project_file(path:&Path, ext:&OsStr, file_title:Option<&str>) -> Resul
 
 fn create_project_dir(path: &Path) -> Result<()> {
         if !path.is_dir() {
-            console::info("Directory does not exist:");
-            console::info(format!("Creating {:?} and adding _index file.", &path).as_str());
             create_dir(&path)?;
             create_file(&path.join("_index.md"), _INDEX_CONTENT)?;
         }
@@ -118,20 +115,23 @@ pub fn add(file_path: Option<&Path>, file_title: Option<&str>) -> Result<()> {
                         if let Some(ext) = user_dir.extension() {
                             // This segment has a extension lets check if its the end of the path or
                             // if its got a trailing slash
-                            let valid_entry = ask_bool("Warning: a file extension is in your path, is this file meant to be there?", false)?;
+                            console::warn("Warning: file extension detected in entered path, is this intended?");
+                            let valid_entry = ask_bool(">", false)?;
 
                             if valid_entry {
-                                create_project_file(&user_dir, &ext, file_title)?;
-                                let _ = &user_dir.pop();
-                            } else {
-                                create_project_dir(&user_dir)?
+                                console::warn("Notice: intended file extension detected in entered path, ignoring remaining path\n");
+                                console::success("created content at path:");
+                                console::info(format!("{:?}", &user_dir.as_os_str()).as_str());
+                                return create_project_file(&user_dir, &ext, file_title);
                             }
                         } else {
                             create_project_dir(&user_dir)?
                         }
 
                     } else {
-                        create_project_file(&user_dir, user_dir.extension().unwrap(), file_title)?
+                        create_project_file(&user_dir, user_dir.extension().unwrap(), file_title)?;
+                        console::success("created content at path:");
+                        console::info(format!("{:?}", &user_dir.as_os_str()).as_str());
                     }
                 }
             }
